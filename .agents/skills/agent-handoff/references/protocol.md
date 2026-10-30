@@ -89,7 +89,8 @@ branch: feature/combat-0142
 **stale 判定**（保守）：
 
 - 心跳早于 `lock.ttl_minutes`（默认 90 分钟）→ stale
-- 同一台机器上记录的 pid 已不存在 → stale（典型崩溃）
+- PID 是写锁的短命命令进程，不代表 Agent 会话；PID 消失不意味着锁过期。
+- TTL 是保守的交接线索，并不能证明另一个会话已经停止；接管前仍须核对。
 - 以上都不满足 → live。别人要接管必须 `--force`，并在 `history/` 留下 `lock_forced` 事件。
 
 不要删除别人的锁文件；`release` 只释放自己的锁。

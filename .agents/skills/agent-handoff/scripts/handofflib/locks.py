@@ -8,7 +8,7 @@ whether the next agent should stop and ask.
 Staleness is deliberately conservative:
 
 * heartbeat older than ``lock.ttl_minutes`` -> stale;
-* on the same machine, a recorded pid that no longer exists -> stale (crash);
+* the recorded PID belongs to a short-lived command, not the Agent session;
 * everything else -> live, and the next agent must not touch the task without
   an explicit ``--force`` that is written into history.
 """
@@ -154,13 +154,11 @@ def analyze(context, task_id: str, ttl_minutes: Optional[int] = None) -> dict:
 
     reasons = []
     if age is None:
-        reasons.append("heartbeat is missing or unparsable")
-    elif age > ttl_seconds:
+        result["state"] = "corrupt"
+        result["reasons"] = ["heartbeat is missing or unparsable"]
+        return result
+    if age > ttl_seconds:
         reasons.append("heartbeat is %s old, ttl is %d min" % (util.humanize_seconds(age), ttl))
-    if same_machine and alive is False:
-        reasons.append("recorded process pid %s no longer exists" % data.get("pid"))
-    if same_machine and alive is None and age is None:
-        reasons.append("cannot verify the recorded process")
 
     if same_agent:
         result["state"] = "live_same"

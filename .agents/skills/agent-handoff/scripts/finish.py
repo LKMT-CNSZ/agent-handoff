@@ -176,17 +176,18 @@ def main() -> int:
         raise common.CliError("; ".join(notes) if notes else "no active task to finish")
 
     lock_state = locks.analyze(context, task.task_id)
-    if lock_state["state"] == "live_foreign":
+    if lock_state["state"] in ("live_foreign", "corrupt"):
         allowed, reason = locks.can_take(context, lock_state, args.force)
         if not allowed:
             raise common.CliError(reason, common.EXIT_BLOCKED)
         notes.append(reason)
-        history.append_event(
-            context,
-            task.task_id,
-            "lock_forced",
-            data={"from_agent": lock_state.get("agent"), "reason": reason, "arguments": sys.argv[1:]},
-        )
+        if not args.dry_run:
+            history.append_event(
+                context,
+                task.task_id,
+                "lock_forced",
+                data={"from_agent": lock_state.get("agent"), "reason": reason, "arguments": sys.argv[1:]},
+            )
 
     # ---------------------------------------------------------------- fail --
     if args.fail:
@@ -244,6 +245,17 @@ def main() -> int:
         )
     if remaining and args.keep_remaining:
         notes.append("%d remaining item(s) archived deliberately with --keep-remaining" % len(remaining))
+
+    # A plain git commit includes the entire index, even when git add was
+    # limited to task paths. Never absorb a user's existing staged changes or
+    # overwrite partially staged content while preparing the two commits.
+    if not args.dry_run and context.git:
+        staged = [entry["path"] for entry in context.git.status_entries() if entry["staged"]]
+        if staged:
+            raise common.CliError(
+                "finish requires an empty Git index; existing staged changes were left untouched:\n  %s"
+                % "\n  ".join(staged[:15]), common.EXIT_REFUSED,
+            )
 
     # ----------------------------------------------------------- checks ----
     results = []

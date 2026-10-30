@@ -138,7 +138,7 @@ function findPython(local) {
     candidates.push({ exe: process.env.AGENT_HANDOFF_PYTHON, prefix: [], source: "AGENT_HANDOFF_PYTHON" });
   }
   if (local.python) {
-    candidates.push({ exe: local.python, prefix: [], source: "local.json" });
+    candidates.push({ exe: local.python, prefix: Array.isArray(local.python_prefix) ? local.python_prefix : [], source: "local.json" });
   }
   const py = resolveOnPath("py");
   if (py) candidates.push({ exe: "py", prefix: ["-3"], source: "py launcher" });
@@ -233,13 +233,14 @@ function codexVisible() {
       const data = JSON.parse(text.slice(start, end + 1));
       const texts = [];
       collectTexts(data, texts);
-      skillsSeen = texts.some((item) => item.includes("agent-handoff") && item.includes("SKILL.md"));
+      const expected = path.join(repoRoot, ".agents", "skills", "agent-handoff", "SKILL.md").replace(/\\/g, "/").toLowerCase();
+      skillsSeen = texts.some((item) => item.includes("<skills_instructions>") && item.split("\n").some((line) => /^- agent-handoff:/.test(line) && line.replace(/\\/g, "/").toLowerCase().includes(expected)));
       agentsSeen = texts.some((item) => item.includes("Agent Handoff"));
     } catch {
-      skillsSeen = text.includes("agent-handoff");
+      skillsSeen = false;
     }
   } else {
-    skillsSeen = text.includes("agent-handoff");
+    skillsSeen = false;
   }
   return { ok: skillsSeen, skills: skillsSeen, agentsMd: agentsSeen, version: version.stdout.trim() };
 }
@@ -253,11 +254,11 @@ function managedBlock(repo) {
     GLOBAL_BLOCK_START,
     "## 多 Agent 接力（agent-handoff）",
     "",
-    `当仓库里存在 \`.agents/skills/agent-handoff/SKILL.md\` 时，用它管理跨 Agent 的长期任务（本机安装来自 ${repo}）：`,
+    "当仓库里存在 `.agents/skills/agent-handoff/SKILL.md` 时，用它管理跨 Agent 的长期任务：",
     "",
     "- 开工前先读仓库 `AGENTS.md` 和该 `SKILL.md`；动态状态只在 `.agent-state/`，不要写进 `AGENTS.md`。",
     "- Windows 上在仓库根运行 `scripts\\Handoff.cmd <start|save|resume|finish|inspect|doctor> --agent codex`（不需要 python 在 PATH）。",
-    "- 恢复任务先 `resume`，按输出的 MODE 与检查清单核对真实代码；结束用 `finish --commit \"...\"`。",
+    "- 恢复任务先 `resume`，按输出的 MODE 与检查清单核对真实代码；是否提交遵循用户要求和项目约定。",
     "- 禁止 `git reset --hard`、`git clean`、强推；真实代码与 Git 高于 checkpoint 描述。",
     GLOBAL_BLOCK_END,
   ].join("\n");
@@ -311,6 +312,11 @@ function setup(argv) {
   const local = readLocal();
   const python = findPython(local);
 
+  if (!fs.existsSync(path.join(skillScripts, "doctor.py"))) {
+    console.error(`agent-handoff skill is missing from ${skillScripts}`);
+    return 2;
+  }
+
   if (!python) {
     console.error("No Python 3.8+ interpreter found.");
     console.error("Install Python (https://www.python.org/downloads/) or point the launcher at one:");
@@ -335,7 +341,7 @@ function setup(argv) {
   // doctor gives the environment a real check; its exit code is reported, not hidden
   const doctor = runChild(
     python.exe,
-    [...(python.prefix || []), path.join(skillScripts, "doctor.py"), "--agent", agent],
+    [...(python.prefix || []), path.join(skillScripts, "doctor.py"), "--fix", "--agent", agent],
     { cwd: repoRoot }
   );
   const doctorCode = typeof doctor.status === "number" ? doctor.status : 2;
@@ -352,7 +358,7 @@ function setup(argv) {
       console.log(`  codex agents  ${visibility.agentsMd ? "project AGENTS.md handoff section is in the prompt" : "handoff section not detected in AGENTS.md"}`);
     }
     console.log("");
-    console.log("Installed. In Codex (repo root) say: 继续没做完的任务  /  开始做 <任务>");
+    console.log(doctorCode >= 2 ? "Setup incomplete: fix the doctor errors above." : "Setup complete. In Codex (repo root) say: 继续没做完的任务  /  开始做 <任务>");
     console.log("or run:  scripts\\Handoff.cmd resume --agent codex");
     console.log("Remove the global block later with: node scripts/handoff.mjs uninstall");
   }

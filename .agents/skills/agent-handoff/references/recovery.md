@@ -16,7 +16,7 @@
 | `vanished_since_checkpoint` | checkpoint 里的脏文件现在不脏了（提交了 / 被还原了 / 被删了） |
 | `missing_claimed_files` | `changed_files` 声称改过、现在磁盘上不存在 |
 | `head_drift` | HEAD 与 checkpoint head 不同 |
-| 锁 stale | 心跳过期，或同机器上记录的 pid 已消失 |
+| 锁 stale | 心跳超过 TTL；这只是线索，接管前仍须确认原会话状态 |
 
 命中前四类中任意一类 → `RECOVERY MODE`。此时 `resume.py` 退出码仍是 0（证据可用），但会打印检查清单。
 

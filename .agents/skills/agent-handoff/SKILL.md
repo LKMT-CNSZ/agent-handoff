@@ -1,6 +1,6 @@
 ---
 name: agent-handoff
-description: 跨 Agent 的任务接力与恢复协议。当需要开始、继续、交接、检查或收尾一个长期开发任务，或用户说"继续没做完的任务/接着 Codex 做/恢复任务/检查项目状态/把这个任务交给别人"时使用。以 Git + 文件状态 + Checkpoint + AGENTS.md 为唯一事实来源，不依赖任何 Agent 的聊天记录、账号或"记忆"。
+description: 在已安装 agent-handoff 的 Git 项目中开始、恢复、检查或交接长期任务；根据实际文件、Git 和检查点核对状态。普通的一次性修改不需要创建交接任务。
 ---
 
 # agent-handoff
@@ -40,7 +40,7 @@ python .agents/skills/agent-handoff/scripts/doctor.py            [--fix]
 
 每个命令都有 `--json` 与 `--help`。全部命令都接受 `--agent NAME`；**必须传**，否则日志无法归因。
 
-Windows（本机已安装）：`python` 不在 PATH 且 PowerShell 执行策略禁止 `.ps1`，所以用启动器：
+Windows 上如不能直接调用 Python，可使用项目内的启动器：
 
 ```text
 scripts\Handoff.cmd resume --agent codex
@@ -49,7 +49,7 @@ scripts\Handoff.cmd tests
 ```
 
 启动器只负责找到 Python（记录在 `.agent-state/local.json`，机器本地、不进 Git）并把参数转发给上面的 `.py`；
-未显式给 `--agent` 时它会注入本机默认身份（Codex 安装后为 `codex`）。`node scripts/handoff.mjs setup` 可修复安装，
+未显式给 `--agent` 时它会注入本机默认身份（默认为 `codex`）。`node scripts/handoff.mjs setup` 可修复安装，
 `... uninstall` 移除本机配置与全局指令。
 
 退出码：`0` 正常；`1` 有警告（doctor 专用：降级）；`2` 错误/无任务/状态损坏；`3` 被其他 Agent 的活锁阻塞；`4` 安全拒绝；`5` 验证失败。
@@ -90,7 +90,7 @@ Git 信息（branch、HEAD、status、diff、修改文件与内容哈希）由�
 2. **读完 `resume.py` 输出的 MODE 与证据**，再读 `REQUIRED INVESTIGATION`
 3. 按清单逐个读真实代码：`changed_files`、`new_since_checkpoint`、`hash_drift`、checkpoint 声称完成的文件
 4. 确认无误后 `resume.py --take`（接管 owner + 锁），必要时 `--checkout`（要求工作区干净）
-5. 继续开发；阶段完成再 `checkpoint.py save`；结束时 `finish.py --commit "..."`
+5. 继续开发；阶段完成再 `checkpoint.py save`。只有用户或项目约定授权提交时才运行 `finish.py --commit "..."`；否则保存交接 checkpoint 并释放锁。
 
 模式含义：
 
@@ -109,6 +109,7 @@ Git 信息（branch、HEAD、status、diff、修改文件与内容哈希）由�
 
 - 交给别的 Agent：`checkpoint.py save --kind handoff --next "下一步" --note "为什么交接"`，然后释放锁 `checkpoint.py release`。对方用 `resume.py --take` 接管。
 - 结束任务：`finish.py --commit "..."`。它会跑声明的验证命令、要求 `remaining` 清空、把工作与交接状态分两次提交（工作提交 + `handoff: archive` 状态提交）、把状态移到 `completed/`、写日志、删锁。**不删除历史**。
+- `finish` 会创建 Git 提交，必须先确认当前任务允许提交；它会拒绝已有暂存内容，避免包含或覆盖不属于本任务的改动。
 - 如果确实要带着未完成项收尾：`--keep-remaining`（会把清单原样写进归档）。没有声明验证命令时必须 `--allow-unverified`。
 - 放弃任务：`finish.py --fail --reason "..."` → `failed/`。
 - 不要用聊天记录交接；唯一交接物是 `.agent-state/` + Git。
@@ -119,6 +120,7 @@ Git 信息（branch、HEAD、status、diff、修改文件与内容哈希）由�
 - **NEVER** `git reset --hard`、`git clean -fd`、`git push --force`、`git checkout -- .`。
 - **NEVER** 删除、覆盖、格式化来源不明的未提交修改；先调查，再报告。
 - **NEVER** 同一个任务同时由两个 Agent 修改；先看 `.agent-state/locks/`，只有 stale 锁或人类明确同意才能接管。
+- 锁仅靠 Agent 名称和机器区分持有者，同一机器上的多个 Codex 会话可能被视作同一个持有者；不要把它当成会话级互斥。写锁命令的 PID 退出也不能证明会话结束。TTL 过期不证明对方已停止，接管前核对。
 - **NEVER** 把 `.agent-state/locks/` 提交进 Git（它描述某一台机器上的进程）。
 - 二进制资产（`.uasset` `.umap` `.blend` `.fbx` `.psd` `.wav` …）**不可文本合并**：谁改谁负责，不要盲改、不要重导、不要"顺手重新生成"。见 `references/protocol.md`。
 - Git 与 checkpoint 冲突、或无法判断上一个 Agent 的意图时：**停止危险操作**，先完成所有安全调查，再向人类提**一个**最小必要问题。
@@ -137,7 +139,7 @@ python .agents/skills/agent-handoff/scripts/simulate_handoff.py --keep
 
 `simulate_handoff.py` 在 `work/` 下建临时仓库，真实跑一遍「建任务 → checkpoint → 崩溃 → RECOVERY → 接管 → 恢复 → 收尾」，失败会保留现场。它**不会**碰真实项目状态。
 
-本机安装 / 修复（Codex 已装好，换机器或换 Python 时重跑）：
+本机安装 / 修复：
 
 ```text
 node scripts/handoff.mjs setup --agent codex     # 找 Python、写 .agent-state/local.json、追加 Codex 全局指令、验证

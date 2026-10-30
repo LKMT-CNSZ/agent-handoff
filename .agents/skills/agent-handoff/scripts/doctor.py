@@ -530,7 +530,7 @@ def render(context, findings, facts, modes, args) -> int:
     report.echo("System Status: %s" % status_text)
     if exit_code != 0:
         report.echo("")
-        report.echo("Nothing was modified.  Fix the items above, then run doctor again.")
+        report.echo("Review the items above, then run doctor again." if args.fix else "Nothing was modified.  Fix the items above, then run doctor again.")
     report.exit_note(exit_code, common.EXIT_MEANINGS.get(exit_code, status_text))
     return exit_code
 
@@ -564,6 +564,11 @@ def main() -> int:
             }
         )
         root = target
+    elif root is not None and args.fix:
+        created = common.scaffold_state(root)
+        if created:
+            findings.append({"name": "Scaffold", "status": "ok",
+                             "detail": "created %d path(s) under %s" % (len(created), root), "group": "state"})
 
     context = None
     facts = {}

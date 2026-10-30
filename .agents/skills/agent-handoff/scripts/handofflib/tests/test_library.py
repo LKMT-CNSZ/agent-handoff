@@ -215,6 +215,29 @@ class TempProject:
 
 
 class LockTests(unittest.TestCase):
+    def test_finished_command_pid_does_not_expire_foreign_lock(self):
+        project = TempProject()
+        try:
+            path = os.path.join(project.context.lock_dir(), "combat-0001.lock")
+            yamlio.dump({"task_id": "combat-0001", "agent": "codex", "machine": project.context.machine,
+                         "pid": "999999", "started_at": util.iso(), "heartbeat": util.iso()}, path)
+            state = locks.analyze(project.context, "combat-0001")
+            self.assertEqual(state["state"], "live_foreign")
+            self.assertFalse(locks.can_take(project.context, state, False)[0])
+        finally:
+            project.cleanup()
+
+    def test_missing_heartbeat_is_not_automatically_takeable(self):
+        project = TempProject()
+        try:
+            path = os.path.join(project.context.lock_dir(), "combat-0001.lock")
+            yamlio.dump({"task_id": "combat-0001", "agent": "codex", "machine": "other"}, path)
+            state = locks.analyze(project.context, "combat-0001")
+            self.assertEqual(state["state"], "corrupt")
+            self.assertFalse(locks.can_take(project.context, state, False)[0])
+        finally:
+            project.cleanup()
+
     def test_missing_lock(self):
         project = TempProject()
         try:
