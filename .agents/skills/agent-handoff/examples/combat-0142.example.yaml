@@ -1,0 +1,84 @@
+# 示例：一个被 Codex 做完、随后归档的任务状态
+# 仅作字段说明；真实文件由 checkpoint.py / finish.py 生成。
+task_id: combat-0142
+format_version: "1"
+title: 实现轻攻击三段连击
+goal: |-
+  实现玩家三段轻攻击 Combo，含输入缓存与耐力消耗。
+  第三段必须能在第二段命中后 0.25s 内接上。
+owner: codex
+status: completed
+created_at: 2026-05-01T08:00:00Z
+updated_at: 2026-05-02T01:12:30Z
+branch: feature/combat-0142
+base_branch: main
+commit: 4d8c1f2
+parent_task:
+dependencies:
+  - combat-0130
+write_scope:
+  - Source/WuxiaPrototype/Public/Combat
+  - Source/WuxiaPrototype/Private/Combat
+next_action:
+completed:
+  - ComboState 已建立
+  - 第一段攻击完成
+  - 第二段攻击完成
+  - 输入缓存完成
+  - 第三段攻击完成
+  - stamina 消耗完成
+  - hitbox 测试通过
+remaining: []
+changed_files:
+  - Source/WuxiaPrototype/Private/Combat/ComboState.cpp
+  - Source/WuxiaPrototype/Private/Combat/WuxiaCombatComponent.cpp
+file_hashes:
+  - path: Source/WuxiaPrototype/Private/Combat/ComboState.cpp
+    sha256: 6b1f0c5d2a9e4b7c8d1e2f3a4b5c6d7e8f90123456789abcdef0123456789ab
+    size: "4213"
+    code: M
+  - path: Source/WuxiaPrototype/Private/Combat/WuxiaCombatComponent.cpp
+    sha256: a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0
+    size: "9012"
+    code: M
+hashes_capped: "false"
+verification:
+  build: pass
+  tests: pass
+  rules: pass
+verification_commands:
+  - name: rules
+    command: pwsh -NoProfile -File scripts/Test-CombatRules.ps1
+    required: "true"
+  - name: workspace
+    command: pwsh -NoProfile -File scripts/Validate-Workspace.ps1
+    required: "false"
+checkpoint:
+  id: ck-0003
+  at: 2026-05-02T01:10:00Z
+  by: codex
+  kind: progress
+  count: "3"
+  head: 4d8c1f2aa0b1c2d3e4f5061728394a5b6c7d8e9f
+  dirty: "false"
+  changed_count: "0"
+  note: 三段连击与耐力消耗完成，规则测试通过
+git_snapshot:
+  branch: feature/combat-0142
+  head: 4d8c1f2aa0b1c2d3e4f5061728394a5b6c7d8e9f
+  head_short: 4d8c1f2
+  dirty: "false"
+  changed_count: "0"
+  captured_at: 2026-05-02T01:12:30Z
+warnings:
+  - 不要修改 Source/WuxiaPrototype/Private/Character/WuxiaCharacter.cpp
+notes: 动画仍是占位；等美术资源接入后另开任务
+finished_at: 2026-05-02T01:12:30Z
+finished_by: dsh
+verification_runs:
+  - name: rules
+    command: pwsh -NoProfile -File scripts/Test-CombatRules.ps1
+    status: pass
+    exit_code: "0"
+    at: 2026-05-02T01:11:40Z
+    required: "true"

@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+work/
+.agent-state/local.json
+.agent-state/python-path.txt
+.agent-state/locks/*.lock
+.agent-state/**/*.tmp
